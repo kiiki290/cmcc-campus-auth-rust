@@ -69,7 +69,7 @@ if (-not $needBuild -and -not $NoBuild) {
 
 if ($needBuild -and -not $NoBuild) {
     $cargo = Resolve-Cargo
-    Write-Host "构建 $profileName（首次 release 构建较慢）..."
+    Write-Host "构建 $profileName（首次构建较慢）..."
     $cargoArgs = @("build")
     if (-not $DebugBuild) { $cargoArgs += "--release" }
     & $cargo @cargoArgs

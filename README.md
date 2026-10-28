@@ -81,6 +81,8 @@ Windows 也可用启动脚本（自动判断是否需要重新构建，然后启
 .\scripts\run.ps1 --screenshot C:\temp\app.png   # 透传程序参数
 ```
 
+也可以直接双击仓库根目录的 `启动.bat`（内部调用 `scripts\run.ps1`，失败时窗口会暂停显示错误）。
+
 运行测试：
 
 ```bash
