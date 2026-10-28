@@ -1,7 +1,7 @@
 //! 认证核心：探测 Portal → 启动 Chromium → 识别验证码 → JS 提交 → 确认放行。
 //!
 //! 与原 Python 版保持相同的关键行为：
-//! - 认证表单必须由页面内 JS `form.submit()` 提交（腾讯云 WAF 会拦截纯 HTTP POST）；
+//! - 认证表单必须由页面内 JS `form.submit()` 提交（瑞数动态防护会拦截纯 HTTP POST）；
 //! - 优先按 URL 含 `unionautologin.do` 定位认证 frame，找不到时回落 `frames[1]`；
 //! - 页面提示成功 ≠ BRAS 已放行，需用 1.1.1.1 递增等待确认。
 
@@ -1157,11 +1157,9 @@ mod tests {
                     "<html><head><title>登录成功</title></head><body><div id=\"admin\">认证成功</div></body></html>".as_bytes(),
                 );
             } else if method == "GET" && path.starts_with("/portalserver/login.jsp") {
-                let html = format!(
-                    "<html><head><title>portal</title></head><frameset rows=\"*\">\
-                     <frame src=\"/portalserver/user/unionautologin.do?brasip=1&area=union&wlanuserip=10.9.8.7&domain=@cmccgxsd\" \
-                     name=\"main\" id=\"topFrame1\"></frameset></html>"
-                );
+                let html = "<html><head><title>portal</title></head><frameset rows=\"*\">\
+                            <frame src=\"/portalserver/user/unionautologin.do?brasip=1&area=union&wlanuserip=10.9.8.7&domain=@cmccgxsd\" \
+                            name=\"main\" id=\"topFrame1\"></frameset></html>";
                 respond(
                     &mut stream,
                     "200 OK",

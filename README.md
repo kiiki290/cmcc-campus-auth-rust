@@ -20,15 +20,17 @@
 
 ## 重要说明（先读）
 
-- **认证必须经过真实 Chromium 内核**。Portal 部署了腾讯云 WAF，纯 HTTP POST 会被
-  202 挑战页拦截；表单必须由页面内 JavaScript `form.submit()` 提交。因此本程序
-  依赖 Chrome/Edge/Chromium，无法做成纯 HTTP 客户端。
-- **尚未在真实校园网环境复验**。仓库内已用本地 mock Portal + 真实
-  `chrome-headless-shell` 完成端到端测试（验证码、表单字段、JS 提交、结果解析、
-  BRAS 放行确认），但无法在开发机上复现腾讯云 WAF 与真实网关行为。首次在校园网
-  使用时请留意日志；若认证失败，优先检查浏览器是否被 WAF 拦截。
+- **认证必须经过真实 Chromium 内核**。Portal 前的瑞数（Riversec）动态防护会用
+  202 挑战页拦截纯 HTTP POST；表单必须由页面内 JavaScript `form.submit()` 提交。
+  因此本程序依赖 Chrome/Edge/Chromium，无法做成纯 HTTP 客户端。
+- **已在真实校园网完成单次认证全流程验证（2026-10-29）**：修复瑞数挑战问题后，
+  使用系统 Edge 跑通 探测→加载认证页→定位 frame→验证码 OCR→JS 提交→结果解析→
+  BRAS 放行确认，日志显示“认证成功”并确认在线。此前的“找不到认证 Frame”已定位并
+  修复（chromiumoxide stealth 补丁被瑞数识别，挑战后返回空页面）。断线自动重连的
+  长时间稳定性仍建议观察；仓库内另有本地 mock Portal + 真实 `chrome-headless-shell`
+  的端到端测试。
 - 只针对特定 Portal（`218.200.239.185:8888/portalserver`，华为/H3C 系网关 +
-  腾讯云 WAF + `unionautologin.do` 表单）验证过，换网络环境不一定可用。
+  瑞数动态防护 + `unionautologin.do` 表单）验证过，换网络环境不一定可用。
 - 认证页仅校园网内可达；在校外运行时探测会超时，程序按“在线”处理并静默待命。
 
 ## 使用预编译包
@@ -177,7 +179,9 @@ Linux 打包需要 `curl`、`jq`、`unzip`。程序启动时按以下顺序解�
    `CMCC_ALLOW_LOOPBACK=1` 时允许（供 mock 测试）。其他 Portal 部署需设置
    `CMCC_PORTAL_HOST=host1,host2:port` 白名单，否则认证会主动中止且不重试。
 6. **浏览器环境**：UA 使用真实浏览器版本/平台（去掉 Headless 标记），并通过 CDP
-   将语言与 Accept-Language 设为 `zh-CN`，避免 Portal 返回英文结果页。
+   将语言与 Accept-Language 设为 `zh-CN`，避免 Portal 返回英文结果页。只覆盖 UA，
+   不启用 chromiumoxide 的 stealth 补丁——这些补丁会被瑞数识别，导致挑战后返回
+   空页面（实网复现）；`navigator.webdriver` 由 `--disable-blink-features=AutomationControlled` 关闭。
 
 轮询探测只发黑洞地址请求，不会给任何外部服务器增加压力。
 
@@ -213,10 +217,16 @@ assets/
 - Python ddddocr → ddddocr-rs（`ddddocr-core` + `ddddocr-ort`），模型字节内嵌
 - 验证码 URL 不再双源硬编码：从 302 得到的 Portal URL 推导 `/portalserver` 根地址
 - 在线探测、认证步骤、重试策略、致命错误列表与原版保持一致
+- **浏览器反检测策略刻意与 Python 版一致**：只用 `--disable-blink-features=AutomationControlled`
+  和 UA 覆盖，不启用 chromiumoxide 的 stealth 补丁。Python/Playwright 没有这一步；
+  Rust 重写时多加的 stealth 补丁会被瑞数识别并返回空页面（2026-10-29 实网修复）。
+  Python 版的 Playwright `page.route` 瑞数脚本回放是为其请求拦截机制服务的，
+  chromiumoxide 默认不开启请求拦截，因此无需移植。
 
 ## 已知局限
 
-- **未在真实校园网复验**（见上文）；WAF 行为变化可能导致认证失败
+- 单次认证已在真实校园网验证（2026-10-29）；断线自动重连的长时间稳定性尚未专门
+  压测，瑞数/WAF 行为变化仍可能导致认证失败
 - 认证结果依赖 Portal 对 POST 直接返回结果页；若 Portal 改为多段跳转，需要适配
 - 账号密码只支持单账号
 - 托盘显示依赖桌面环境的 StatusNotifier 支持（GNOME 需扩展）
@@ -226,8 +236,8 @@ assets/
   没有 AppArmor profile 时无法启用沙箱；程序会自动以 `--no-sandbox` 重试并在日志中警告
   （浏览器进程隔离性降低）。系统 Chrome/Chromium 的 deb 包通常自带 AppArmor profile，
   可继续使用沙箱
-- Windows 版本代码路径已在 Windows 11 + MSVC 工具链下完成编译并通过单元测试；
-  GUI 运行、浏览器端到端（mock Portal）与实网认证尚未在 Windows 上复验
+- Windows 版本已在 Windows 11 + MSVC 工具链下完成编译、单元测试、GUI 运行、
+  mock Portal 端到端与实网单次认证验证（2026-10-29）；断线自动重连长稳仍建议观察
 - 旧版配置文件/DPAPI 密码不自动迁移
 
 ## License

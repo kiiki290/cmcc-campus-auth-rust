@@ -1,6 +1,6 @@
 //! Chromium 定位与启动。
 //!
-//! 认证必须由真实 Chromium 内核执行 JS（腾讯云 WAF 会拦截纯 HTTP POST），
+//! 认证必须由真实 Chromium 内核执行 JS（瑞数动态防护会拦截纯 HTTP POST），
 //! 因此程序支持两种来源：
 //! - 随包 Chromium/chrome-headless-shell：放在程序目录 `chromium/` 下即可被自动发现；
 //! - 系统已安装的 Edge / Chrome / Chromium。
@@ -402,12 +402,16 @@ async fn launch_once(
         .await
         .context("创建浏览器页面失败")?;
 
-    // 反自动化指纹（navigator.webdriver、window.chrome 等）+ 与浏览器真实版本/平台一致的 UA。
+    // 只覆盖 UA，不要启用 chromiumoxide 的 stealth 模式（enable_stealth_mode_with_agent）：
+    // 它注入的 window.chrome / navigator.plugins / WebGL 补丁会被 Portal 的瑞数（Riversec）
+    // 动态防护识别，挑战脚本执行后返回 400 空页面，导致“找不到认证 Frame”。实网已复现：
+    // 默认参数 + stealth → 空页面；去掉 stealth、仅覆盖 UA → 正常进入 Portal。
+    // navigator.webdriver 由 `.hide()` 的 --disable-blink-features=AutomationControlled 关闭。
     // 不能把 Linux 浏览器硬伪装成 Windows：UA、navigator.platform、Client Hints 会互相矛盾。
     let native_ua = page.user_agent().await.unwrap_or_default();
     let ua = sanitized_user_agent(&native_ua);
-    if let Err(err) = page.enable_stealth_mode_with_agent(&ua).await {
-        sink.warn(format!("启用反检测模式失败（继续尝试）：{err}"));
+    if let Err(err) = page.set_user_agent(ua.as_str()).await {
+        sink.warn(format!("设置 User-Agent 失败（继续尝试）：{err}"));
     }
 
     // chromiumoxide 默认带 --lang=en_US；用 CDP 覆盖语言与 Accept-Language，

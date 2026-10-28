@@ -3,8 +3,8 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 校园宽带自动认证 GUI：Rust + egui 重写自同目录的 Python CLI 项目（`../cmcc-campus-auth`）。
-面向 Windows + Linux；认证核心依赖真实 Chromium 内核（腾讯云 WAF 拦截纯 HTTP POST）。
-全部注释、日志、界面为中文；无 lint 配置；实网未复验（见 README）。
+面向 Windows + Linux；认证核心依赖真实 Chromium 内核（Portal 前的瑞数动态防护拦截纯 HTTP POST）。
+全部注释、日志、界面为中文；无 lint 配置；实网已验证单次认证全流程（2026-10-29，见 README）。
 
 ## 常用命令
 
@@ -41,8 +41,8 @@ scripts/package.sh
 
 ## 认证核心不可随意改动的点
 
-- **必须由浏览器 JS `form.submit()` 提交**：腾讯云 WAF Layer 5 会校验；纯 HTTP POST
-  即使 cookie/header/body 完全一致也返回 202。不要为了“轻量化”改成 reqwest/ureq。
+- **必须由浏览器 JS `form.submit()` 提交**：Portal 前的瑞数（Riversec）动态防护会校验；
+  纯 HTTP POST 即使 cookie/header/body 完全一致也返回 202。不要为了“轻量化”改成 reqwest/ureq。
 - **探测只用黑洞 IP `192.0.2.1`**：未认证时网关 302 到 Portal；已在线时无应答→超时。
   不要把轮询改回 `1.1.1.1`（旧版方案，会给外部服务加压力）。`1.1.1.1` 只用于认证后
   毫秒级放行确认。
@@ -77,6 +77,10 @@ scripts/package.sh
   （UA 与 navigator.platform/Client Hints 会矛盾）。chromiumoxide 默认 `--lang=en_US`，
   通过 CDP `Emulation.setLocaleOverride` + `Network.setUserAgentOverride` 设置 `zh-CN`
   和 Accept-Language。
+- **不要启用 `enable_stealth_mode_with_agent`**：它注入的 `window.chrome` /
+  `navigator.plugins` / WebGL 补丁会被瑞数识别，挑战脚本执行后返回 400 空页面，
+  表现为“找不到认证 Frame”（2026-10-29 实网复现）。只覆盖 UA 即可，
+  `navigator.webdriver` 由 `.hide()` 的 `--disable-blink-features=AutomationControlled` 关闭。
 - 默认参数已含 `--password-store=basic`、`--disable-dev-shm-usage`；`CMCC_NO_SANDBOX=1`
   可强制关闭沙箱。Ubuntu 23.10+ 的 AppArmor userns 限制会让随包 headless shell 报
   “No usable sandbox”，`launch()` 会自动以 `--no-sandbox` 重试并用静态标志记住，
@@ -104,7 +108,9 @@ scripts/package.sh
 - UI 截图调试：`cargo run -- --screenshot /tmp/app.png`（渲染数帧后保存并退出），
   已用于验证中文字体/布局。开发时用 `XDG_CONFIG_HOME`/`XDG_DATA_HOME` 指向临时目录，
   避免污染真实配置。
-- **真实校园网尚未验证**。腾讯云 WAF 的行为、Portal 改版、BRAS 放行细节只能在实网确认；
+- **实网验证状态**：2026-10-29 已在真实校园网用系统 Edge 完成单次认证全流程
+  （探测→frame→OCR→JS 提交→结果→BRAS 放行）；瑞数挑战失败问题已复现并修复。
+  断线自动重连的长时间稳定性仍建议观察；Portal 改版、放行细节仍只能在实网确认。
   改动认证相关代码后，至少跑 mock 测试，并在 README「已知局限」中如实记录。
 
 ## 打包

@@ -24,3 +24,7 @@
   正常路径 --minimized 隐藏（IsUnMapped）、沙箱自动降级、连续 3 次认证成功。
 - [2026-10-28] 打包与文档：Linux/Windows 双分发脚本、README、CLAUDE.md、MIT License、
   ddddocr 模型与测试验证码资源；文件日志（app.log）、版本一致的 UA、显式跨平台配置路径；Ubuntu 23.10+ 沙箱不可用时自动降级并记忆。
+- [2026-10-29] 实网定位并修复“找不到认证 Frame”：Portal 的瑞数动态防护会识别
+  chromiumoxide stealth 补丁并返回 400 空页面。改为只覆盖 UA，保留
+  `--disable-blink-features=AutomationControlled`。修复后单次认证全流程实网验证通过
+  （系统 Edge：探测→frame→OCR→JS 提交→结果→BRAS 放行），mock 端到端回归通过。
