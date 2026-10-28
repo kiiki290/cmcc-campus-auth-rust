@@ -215,7 +215,8 @@ assets/
   没有 AppArmor profile 时无法启用沙箱；程序会自动以 `--no-sandbox` 重试并在日志中警告
   （浏览器进程隔离性降低）。系统 Chrome/Chromium 的 deb 包通常自带 AppArmor profile，
   可继续使用沙箱
-- Windows 版本代码路径已按平台条件编译，但本仓库只在 Linux 上构建/运行验证过
+- Windows 版本代码路径已在 Windows 11 + MSVC 工具链下完成编译并通过单元测试；
+  GUI 运行、浏览器端到端（mock Portal）与实网认证尚未在 Windows 上复验
 - 旧版配置文件/DPAPI 密码不自动迁移
 
 ## License
