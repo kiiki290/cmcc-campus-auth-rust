@@ -55,11 +55,13 @@ pub fn http_get_head(target: &str, timeout: Duration) -> io::Result<HttpResponse
     stream.set_read_timeout(Some(timeout))?;
     stream.set_write_timeout(Some(timeout))?;
 
-    write!(
-        stream,
+    // 一次性写出完整请求：分片写出时部分服务器读到首段就应答并关闭，
+    // 未读数据会让 Windows 内核回 RST，客户端会丢掉响应。
+    let request = format!(
         "GET / HTTP/1.1\r\nHost: {target}\r\nUser-Agent: {USER_AGENT}\r\n\
          Accept: */*\r\nConnection: close\r\n\r\n"
-    )?;
+    );
+    stream.write_all(request.as_bytes())?;
     stream.flush()?;
 
     let mut buf = Vec::with_capacity(1024);
@@ -203,9 +205,19 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         let handle = thread::spawn(move || {
             if let Ok((mut stream, _)) = listener.accept() {
-                let mut buf = [0u8; 512];
-                let _ = stream.read(&mut buf);
+                // 读到请求头结束再应答；残留未读请求数据时直接关闭，
+                // Windows 会回 RST，客户端读不到响应。
+                let mut buf = Vec::new();
+                let mut chunk = [0u8; 512];
+                while !buf.windows(4).any(|w| w == b"\r\n\r\n") {
+                    match stream.read(&mut chunk) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => buf.extend_from_slice(&chunk[..n]),
+                    }
+                }
                 let _ = stream.write_all(response.as_bytes());
+                let _ = stream.flush();
+                let _ = stream.shutdown(std::net::Shutdown::Write);
             }
         });
         (format!("127.0.0.1:{}", addr.port()), handle)

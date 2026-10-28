@@ -223,9 +223,9 @@ fn system_browser() -> Option<PathBuf> {
         }
         for root in roots {
             for rel in [
-                ["Microsoft", "Edge", "Application", "msedge.exe"],
-                ["Google", "Chrome", "Application", "chrome.exe"],
-                ["Chromium", "Application", "chrome.exe"],
+                &["Microsoft", "Edge", "Application", "msedge.exe"][..],
+                &["Google", "Chrome", "Application", "chrome.exe"][..],
+                &["Chromium", "Application", "chrome.exe"][..],
             ] {
                 let path = rel.iter().fold(root.clone(), |p, part| p.join(part));
                 if path.is_file() {
