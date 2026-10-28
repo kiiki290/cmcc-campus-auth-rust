@@ -72,6 +72,15 @@ sudo apt install build-essential pkg-config \
 Windows 上安装 Rust（MSVC 工具链）与 Visual Studio Build Tools，然后直接
 `cargo build --release`；首次构建同样会下载 onnxruntime。
 
+Windows 也可用启动脚本（自动判断是否需要重新构建，然后启动）：
+
+```powershell
+.\scripts\run.ps1              # release 构建并启动
+.\scripts\run.ps1 -DebugBuild  # 使用 debug 构建
+.\scripts\run.ps1 -NoBuild     # 跳过构建，直接启动
+.\scripts\run.ps1 --screenshot C:\temp\app.png   # 透传程序参数
+```
+
 运行测试：
 
 ```bash
