@@ -410,11 +410,8 @@ async fn launch_once(
     // 不能把 Linux 浏览器硬伪装成 Windows：UA、navigator.platform、Client Hints 会互相矛盾。
     let native_ua = page.user_agent().await.unwrap_or_default();
     let ua = sanitized_user_agent(&native_ua);
-    if let Err(err) = page.set_user_agent(ua.as_str()).await {
-        sink.warn(format!("设置 User-Agent 失败（继续尝试）：{err}"));
-    }
 
-    // chromiumoxide 默认带 --lang=en_US；用 CDP 覆盖语言与 Accept-Language，
+    // chromiumoxide 默认带 --lang=en_US；用 CDP 覆盖 UA、语言与 Accept-Language，
     // 避免 Portal 按语言返回英文结果页导致“登录成功”判断失败。
     let locale = SetLocaleOverrideParams::builder().locale("zh-CN").build();
     if let Err(err) = page.execute(locale).await {
@@ -427,10 +424,10 @@ async fn launch_once(
     {
         Ok(params) => {
             if let Err(err) = page.execute(params).await {
-                sink.warn(format!("设置 Accept-Language 失败（忽略）：{err}"));
+                sink.warn(format!("设置 UA/Accept-Language 失败（忽略）：{err}"));
             }
         }
-        Err(err) => sink.warn(format!("构造 Accept-Language 参数失败（忽略）：{err}")),
+        Err(err) => sink.warn(format!("构造 UA/Accept-Language 参数失败（忽略）：{err}")),
     }
 
     // 视口与原版 Playwright 接近，避免 800x600 与指纹中的屏幕尺寸过于异常

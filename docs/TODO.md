@@ -2,10 +2,12 @@
 
 - [ ] **实网长稳验证**：断线自动重连的长时间稳定性、验证码识别率与 Portal 改版监控
       仍需持续观察。
-      - [x] 2026-10-29 单次认证全流程实网验证通过（系统 Edge + 瑞数挑战 + 验证码 OCR +
-        JS 提交 + BRAS 放行）；瑞数挑战失败（stealth 补丁）已实网复现并修复。
-- [ ] **Windows 构建与打包验证**：在 Windows 上 `cargo build --release`、运行 lite/bundled
-      两个包，验证 Edge/Chrome 定位、凭据管理器、注册表自启、托盘。
+      - [x] 2026-10-29 单次认证全流程实网验证通过（Windows 11 + 系统 Edge + 瑞数挑战 +
+        验证码 OCR + JS 提交 + BRAS 放行）；瑞数挑战失败（stealth 补丁）已实网复现并修复。
+- [ ] **Windows 打包与其余功能验证**：运行 lite/bundled 两个包，验证 Chrome/Chromium
+      定位、凭据管理器、注册表自启、托盘（系统 Edge 路径已实网验证）。
+      - [x] 2026-10-29 Windows 11 + MSVC：`cargo build --release`、单元测试、GUI 运行、
+        mock Portal 端到端均通过。
 - [ ] 可选：迁移旧 Python 版配置（学号、检测间隔）与 DPAPI 密码（Windows `windows` crate）。
 - [ ] 可选：GitHub Actions 双平台构建产物。
 - [ ] 可选：Windows exe 文件图标（资源嵌入）与应用清单。

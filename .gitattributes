@@ -1,0 +1,4 @@
+# Windows 批处理必须以 CRLF 检出：cmd.exe 的 goto/标签查找按字节偏移读取，
+# LF-only 脚本可能报 “cannot find the batch label specified”。
+*.bat text eol=crlf
+*.cmd text eol=crlf

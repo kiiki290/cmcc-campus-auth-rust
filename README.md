@@ -74,7 +74,10 @@ sudo apt install build-essential pkg-config \
 Windows 上安装 Rust（MSVC 工具链）与 Visual Studio Build Tools，然后直接
 `cargo build --release`；首次构建同样会下载 onnxruntime。
 
-Windows 也可用启动脚本（自动判断是否需要重新构建，然后启动）：
+Windows 也可用启动脚本（自动判断是否需要重新构建，然后启动）。
+脚本需要 PowerShell 7（`pwsh`，7.0 及以上）；Windows 自带的 Windows PowerShell 5.1
+不满足（`#requires -Version 7.0`），请先安装 PowerShell 7（如
+`winget install --id Microsoft.PowerShell`）：
 
 ```powershell
 .\scripts\run.ps1              # release 构建并启动
