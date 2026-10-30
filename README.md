@@ -1,7 +1,7 @@
-# 校园宽带自动认证（Rust GUI 版）
+# 校园宽带自动认证（Rust + Tauri 版）
 
-中国移动校园宽带 Portal 认证的**断线自动重连**桌面应用。Rust + egui 重写自
-[cmcc-campus-auth](https://github.com/kiiki290/cmcc-campus-auth)（Python CLI 版）。
+中国移动校园宽带 Portal 认证的**断线自动重连**桌面应用。Rust + Tauri 2（系统 WebView）
+重写自 [cmcc-campus-auth](https://github.com/kiiki290/cmcc-campus-auth)（Python CLI 版）。
 
 断线后自动重新认证；验证码由本地 OCR 识别；密码保存在操作系统密钥环；关闭窗口可常驻托盘。
 
@@ -10,13 +10,16 @@
 ## 功能
 
 - **断线自动重连**：轮询黑洞地址判断在线状态，掉线即自动重走认证流程
-- **GUI 控制台**：在线状态、立即认证/取消、开始/停止监控、实时日志、设置
+- **紧凑 GUI**：Tauri 2 + 系统 WebView（无 Electron），状态/认证阶段条、立即认证/取消、
+  开始/停止监控、实时日志、设置；浅色/深色跟随系统
 - **系统托盘**：关闭到托盘、托盘菜单快捷操作
 - **单实例**：重复启动会唤起已有窗口，避免双开互踢
 - **开机自启**：Windows 当前用户注册表 / Linux XDG Autostart
 - **凭据安全**：密码存系统密钥环（Windows 凭据管理器 / Linux Secret Service），不写入配置文件
 - **验证码本地识别**：ddddocr 模型直接编译进程序，首次运行无需联网下载
 - **两种浏览器分发**：使用系统 Edge/Chrome/Chromium，或随包携带 headless Chromium
+- **低开销前端**：纯 HTML/CSS/JS（无框架、无构建步骤、无 Node 运行时依赖），
+  日志批量 IPC、前端内存上限 1500 行 / DOM 600 节点
 
 ## 重要说明（先读）
 
@@ -53,26 +56,29 @@
 
 ## 从源码构建
 
-要求 Rust **1.92+**（edition 2024）。
+要求 Rust **1.92+**（edition 2024）。前端是纯静态文件，**不需要 Node 构建**；
+Tauri CLI 仅用于 `tauri dev` 热更新和生成 deb/AppImage/NSIS 安装包。
 
 ```bash
 # 首次构建会下载 onnxruntime 预编译库（ort crate），需要联网
-cargo build --release
-./target/release/cmcc-campus-auth
+cargo run --release            # 直接编译运行（ui/ 在编译期嵌入二进制）
+
+# 开发时前端改动即时生效（需要 Tauri CLI）
+npm i -g @tauri-apps/cli@2
+tauri dev
 ```
 
-Linux 构建依赖（eframe/glow + Wayland/X11）：
+Linux 构建依赖（Tauri 2 + WebKitGTK 4.1，需 Ubuntu 22.04+/Debian 12+ 等提供 webkit2gtk-4.1 的发行版）：
 
 ```bash
-sudo apt install build-essential pkg-config \
-    libxkbcommon-dev libxkbcommon-x11-dev \
-    libgl1-mesa-dev libegl1-mesa-dev \
-    libwayland-dev libx11-xcb-dev \
-    libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
+sudo apt install build-essential pkg-config curl wget file \
+    libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev \
+    librsvg2-dev libayatana-appindicator3-dev libxdo-dev libssl-dev
 ```
 
 Windows 上安装 Rust（MSVC 工具链）与 Visual Studio Build Tools，然后直接
-`cargo build --release`；首次构建同样会下载 onnxruntime。
+`cargo build --release`；首次构建同样会下载 onnxruntime。运行时需要 WebView2
+（Windows 10/11 一般已预装；离线环境可用 Tauri 的 offline installer 配置）。
 
 Windows 也可用启动脚本（自动判断是否需要重新构建，然后启动）。
 脚本需要 PowerShell 7（`pwsh`，7.0 及以上）；Windows 自带的 Windows PowerShell 5.1
@@ -83,7 +89,7 @@ Windows 也可用启动脚本（自动判断是否需要重新构建，然后启
 .\scripts\run.ps1              # release 构建并启动
 .\scripts\run.ps1 -DebugBuild  # 使用 debug 构建
 .\scripts\run.ps1 -NoBuild     # 跳过构建，直接启动
-.\scripts\run.ps1 --screenshot C:\temp\app.png   # 透传程序参数
+.\scripts\run.ps1 --minimized  # 透传程序参数
 ```
 
 也可以直接双击仓库根目录的 `启动.bat`（内部调用 `scripts\run.ps1`，失败时窗口会暂停显示错误）。
@@ -121,10 +127,12 @@ export CMCC_NO_SANDBOX=1
 启动参数：
 
 ```text
---minimized           启动后最小化到托盘（开机自启使用）
---screenshot <路径>   渲染后截图并退出（调试）
+--minimized     启动后最小化到托盘（开机自启使用）
 --version / --help
 ```
+
+调试界面可用 `tauri dev` 打开 WebKit Inspector，或用系统截图工具截取窗口
+（原 `--screenshot` 调试模式已随 egui 一并移除）。
 
 ## 打包两个分发版本
 
@@ -136,6 +144,19 @@ scripts/package.sh
 powershell -ExecutionPolicy Bypass -File scripts\package.ps1
 ```
 
+前端已嵌入二进制，上面的便携包与旧版结构一致。需要系统安装包时：
+
+```bash
+# Linux deb + AppImage（lite）
+npx @tauri-apps/cli@2 build --bundles deb,appimage
+
+# bundled 版 deb：先把 chromium 放到 src-tauri/chromium/，再合并资源覆盖配置
+npx @tauri-apps/cli@2 build --bundles deb --config src-tauri/tauri.bundled.conf.json
+
+# Windows NSIS 安装包（需在 Windows 上运行，WebView2 默认在线引导安装）
+npx @tauri-apps/cli@2 build --bundles nsis
+```
+
 `scripts/fetch_chromium.sh|.ps1` 会从 Chrome for Testing 清单下载当前稳定版
 `chrome-headless-shell`（Linux 缓存在
 `~/.cache/cmcc-campus-auth/chrome-for-testing`，Windows 在
@@ -143,8 +164,10 @@ powershell -ExecutionPolicy Bypass -File scripts\package.ps1
 Linux 打包需要 `curl`、`jq`、`unzip`。程序启动时按以下顺序解析浏览器：
 
 1. 环境变量 `CMCC_BUNDLED_CHROMIUM`（开发/测试用，优先级最高）
-2. 随包目录：程序目录下 `chromium/`、`chrome-headless-shell/`、`browser/`（递归查找）
-3. 系统浏览器：Windows 的 Edge/Chrome/Chromium；Linux 的 `chromium`、
+2. Tauri 资源目录下的 `chromium/`（deb/AppImage 安装包用）
+3. 随包目录：程序目录下 `chromium/`、`chrome-headless-shell/`、`browser/`
+   `resources/chromium/`（递归查找）
+4. 系统浏览器：Windows 的 Edge/Chrome/Chromium；Linux 的 `chromium`、
    `google-chrome`、`microsoft-edge` 等
 
 “自定义路径”是独立的浏览器模式（`browser_mode=custom`），不参与自动解析。
@@ -191,22 +214,34 @@ Linux 打包需要 `curl`、`jq`、`unzip`。程序启动时按以下顺序解�
 ## 代码结构
 
 ```text
-src/
-├── main.rs          启动、单实例、tokio 运行时、eframe
-├── app.rs           egui 界面、设置、日志、托盘/自启交互
-├── engine.rs        单次认证 / 断线监控任务
-├── auth.rs          认证流程、JS 注入、结果解析、重试
-├── browser.rs       Chrome/Edge 定位与 chromiumoxide 启动
-├── ocr.rs           ddddocr 模型（内嵌）与识别
-├── probe.rs         黑洞探测 / 放行确认（HTTP 原始报文解析）
-├── config.rs        配置读写、路径
-├── credentials.rs   系统密钥环
-├── tray.rs          tray-icon 托盘菜单
-├── single_instance.rs  文件锁 + 回环端口唤起
-├── autostart.rs     开机自启
-├── events.rs        核心→GUI 事件
-├── logging.rs       追加式文件日志 app.log
-├── icon.rs          运行时绘制图标
+ui/                        前端（纯静态，无构建步骤）
+├── index.html             控制页 / 设置页 / 日志 / 对话框
+├── style.css              设计令牌、浅色/深色、组件样式
+└── app.js                 状态机、Channel 订阅、日志环形缓冲
+
+src-tauri/                 Rust 端（Tauri 2）
+├── tauri.conf.json        窗口、CSP、打包配置
+├── capabilities/          最小权限（core:default）
+├── icons/                 平台图标（由 icon.rs 程序化生成）
+└── src/
+    ├── main.rs            CLI、Tauri Builder、托盘、窗口生命周期
+    ├── lib.rs             模块导出（测试/示例共用）
+    ├── commands.rs        IPC 命令与设置保存/清除等业务规则
+    ├── state.rs           AppState、快照、初始数据 Bootstrap
+    ├── bridge.rs          EngineEvent → Channel 批量转发 + 日志环
+    ├── window.rs          显示/聚焦主窗口、启动显示策略
+    ├── engine.rs          单次认证 / 断线监控任务
+    ├── auth.rs            认证流程、JS 注入、结果解析、重试
+    ├── browser.rs         Chrome/Edge 定位与 chromiumoxide 启动
+    ├── ocr.rs             ddddocr 模型（内嵌）与识别
+    ├── probe.rs           黑洞探测 / 放行确认（HTTP 原始报文解析）
+    ├── config.rs          配置读写、路径
+    ├── credentials.rs     系统密钥环
+    ├── tray.rs            Tauri 托盘菜单 + Linux 宿主探测
+    ├── autostart.rs       开机自启（AppImage 用 $APPIMAGE）
+    ├── events.rs          核心→界面事件（含认证阶段埋点）
+    ├── logging.rs         追加式文件日志 app.log
+    └── icon.rs            运行时绘制图标
 assets/
 ├── models/common_old.onnx      ddddocr 旧版 OCR 模型（约 13 MB，MIT）
 └── test/captcha_6971.png       测试用验证码
@@ -214,7 +249,7 @@ assets/
 
 ## 与原 Python 版的差异
 
-- CLI → GUI（egui），内置托盘、单实例、开机自启
+- CLI → 桌面 GUI（Tauri 2 + 系统 WebView），内置托盘、单实例、开机自启
 - Windows DPAPI → 跨平台系统密钥环（Windows 凭据管理器 / Linux Secret Service）
 - Python Playwright + bundled Chromium → Rust chromiumoxide + 系统/随包 Chromium
 - Python ddddocr → ddddocr-rs（`ddddocr-core` + `ddddocr-ort`），模型字节内嵌
@@ -226,13 +261,40 @@ assets/
   Python 版的 Playwright `page.route` 瑞数脚本回放是为其请求拦截机制服务的，
   chromiumoxide 默认不开启请求拦截，因此无需移植。
 
+## 资源占用
+
+release 构建，Linux + WebKitGTK 2.52，窗口空闲时的实测（同一进程树）：
+
+| 进程 | RSS | PSS |
+|---|---:|---:|
+| 主进程（Rust + GTK） | 约 151 MB | 约 52 MB |
+| WebKitWebProcess | 约 196 MB | 约 84 MB |
+| WebKitNetworkProcess | 约 49 MB | 约 15 MB |
+| **合计** | 约 396 MB（共享库被重复计入） | **约 151 MB** |
+
+- 空闲 CPU ≈ 0%：事件驱动，无定时重绘、无常驻动画；仅认证任务运行时才有负载。
+- 迁移前的 egui 版为单进程约 50–80 MB。Tauri 的系统 WebView 多进程模型必然带来
+  约 +70–100 MB 常驻开销（PSS 口径），这是换取界面表现力的代价，仍显著低于
+  Electron（约 200–350 MB）。debug 构建会因符号与未优化代码明显更高，请以
+  release 为准。
+- 测量时开发机窗口被 WM 异常置为最小化（会话级问题，与程序无关），可见状态下的
+  数值可能略有差异。
+
 ## 已知局限
 
 - 单次认证已在真实校园网验证（2026-10-29）；断线自动重连的长时间稳定性尚未专门
   压测，瑞数/WAF 行为变化仍可能导致认证失败
 - 认证结果依赖 Portal 对 POST 直接返回结果页；若 Portal 改为多段跳转，需要适配
 - 账号密码只支持单账号
-- 托盘显示依赖桌面环境的 StatusNotifier 支持（GNOME 需扩展）
+- 托盘显示依赖桌面环境的 StatusNotifier 支持（GNOME 需 AppIndicator 扩展）；Linux 上
+  Tauri 不转发托盘图标点击事件，请用菜单项「显示主窗口」
+- **内存开销高于 egui 版**：Tauri 使用系统 WebView，Linux 为 WebKitGTK 多进程、
+  Windows 为 WebView2 多进程。前端已按最低开销实现（无框架、无动画、日志上限），
+  但常驻内存仍明显高于纯 Rust 立即模式 GUI（PSS 合计约 151 MB，见「资源占用」）
+- Windows 运行时依赖 WebView2（Win10/11 通常已预装；无网络的校园环境请用带
+  offline installer 的安装包）
+- 部分 NVIDIA + Wayland 环境 WebKitGTK 的 DMA-BUF 渲染会显示空白窗口，可设置
+  `WEBKIT_DISABLE_DMABUF_RENDERER=1` 后重启程序（本机未复现，仅记录已知规避法）
 - Linux 若使用 snap 版 Chromium，自定义 profile 可能受沙箱限制；启动失败时建议改用
   bundled 版或 Google Chrome 的 deb 包
 - Ubuntu 23.10+ 默认限制 unprivileged user namespaces，随包 `chrome-headless-shell`

@@ -4,7 +4,7 @@
     构建（如需）并启动校园宽带自动认证 GUI。
 
 .DESCRIPTION
-    默认使用 release 构建；源码、Cargo.toml、Cargo.lock 或 assets 比 exe 新时自动重新构建。
+    默认使用 release 构建；源码、前端 ui/、Cargo.toml、Cargo.lock 或 assets 比 exe 新时自动重新构建。
     程序已在运行时，单实例机制会把现有窗口唤到前台，不会重复启动。
 
 .PARAMETER DebugBuild
@@ -18,7 +18,7 @@
     无条件重新构建。
 
 .PARAMETER AppArgs
-    透传给程序的参数，例如 --screenshot C:\temp\app.png。
+    透传给程序的参数，例如 --minimized。
 
 .EXAMPLE
     .\scripts\run.ps1
@@ -27,7 +27,7 @@
     .\scripts\run.ps1 -DebugBuild
 
 .EXAMPLE
-    .\scripts\run.ps1 --screenshot C:\temp\app.png
+    .\scripts\run.ps1 --minimized
 #>
 param(
     [switch]$DebugBuild,
@@ -57,8 +57,12 @@ $needBuild = $ForceBuild -or -not (Test-Path $exe)
 if (-not $needBuild -and -not $NoBuild) {
     $stamp = (Get-Item $exe).LastWriteTimeUtc
     $inputs = @(
-        Get-ChildItem "src" -Recurse -File -Filter *.rs -ErrorAction SilentlyContinue
-        Get-Item "Cargo.toml", "Cargo.lock" -ErrorAction SilentlyContinue
+        Get-ChildItem "src-tauri\src" -Recurse -File -ErrorAction SilentlyContinue
+        Get-ChildItem "src-tauri\capabilities" -Recurse -File -ErrorAction SilentlyContinue
+        Get-ChildItem "src-tauri\icons" -Recurse -File -ErrorAction SilentlyContinue
+        Get-ChildItem "ui" -Recurse -File -ErrorAction SilentlyContinue
+        Get-Item "Cargo.toml", "Cargo.lock", "src-tauri\Cargo.toml", "src-tauri\build.rs", `
+            "src-tauri\tauri.conf.json", "src-tauri\tauri.windows.conf.json" -ErrorAction SilentlyContinue
         Get-ChildItem "assets" -Recurse -File -ErrorAction SilentlyContinue
     )
     if ($inputs | Where-Object { $_.LastWriteTimeUtc -gt $stamp }) {

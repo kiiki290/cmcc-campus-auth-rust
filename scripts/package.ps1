@@ -11,9 +11,9 @@ param(
 $ErrorActionPreference = "Stop"
 Set-Location (Split-Path $PSScriptRoot -Parent)
 
-$versionLine = Select-String -Path "Cargo.toml" -Pattern '^version\s*=\s*"(.+)"' |
+$versionLine = Select-String -Path "src-tauri\Cargo.toml" -Pattern '^version\s*=\s*"(.+)"' |
     Select-Object -First 1
-if (-not $versionLine) { throw "无法从 Cargo.toml 读取版本号" }
+if (-not $versionLine) { throw "无法从 src-tauri\Cargo.toml 读取版本号" }
 $version = $versionLine.Matches[0].Groups[1].Value
 
 Write-Host "构建 release（v$version）..."

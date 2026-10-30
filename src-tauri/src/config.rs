@@ -24,24 +24,6 @@ pub enum BrowserMode {
     Custom,
 }
 
-impl BrowserMode {
-    pub const ALL: [BrowserMode; 4] = [
-        BrowserMode::Auto,
-        BrowserMode::System,
-        BrowserMode::Bundled,
-        BrowserMode::Custom,
-    ];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            BrowserMode::Auto => "自动（优先随包）",
-            BrowserMode::System => "系统浏览器",
-            BrowserMode::Bundled => "随包 Chromium",
-            BrowserMode::Custom => "自定义路径",
-        }
-    }
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppConfig {

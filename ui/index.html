@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>校园宽带自动认证</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+<div id="app">
+  <header class="app-header">
+    <div class="brand">
+      <h1>校园宽带自动认证</h1>
+      <span id="version" class="version"></span>
+    </div>
+    <div class="header-actions">
+      <span id="phase-chip" class="chip">待机</span>
+      <span id="monitor-chip" class="chip chip-monitor" hidden>监控中</span>
+      <span id="busy-spinner" class="spinner" hidden aria-hidden="true"></span>
+      <button id="btn-settings" class="icon-btn" type="button" aria-label="设置" title="设置">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+             stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.14.4.49.72.93.87.2.07.41.11.62.13H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z"></path>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main">
+    <div id="notice" class="notice" role="status" hidden>
+      <span id="notice-text"></span>
+      <button id="notice-close" class="notice-close" type="button" aria-label="关闭提示">×</button>
+    </div>
+
+    <section id="view-control" class="view" aria-label="控制">
+      <div id="status-card" class="status-card" data-phase="idle">
+        <div class="status-line">
+          <span class="status-dot" aria-hidden="true"></span>
+          <h1 id="phase-title" class="status-title" aria-live="polite">待机</h1>
+        </div>
+        <p id="phase-sub" class="status-sub">监控已停止</p>
+        <div id="stage-bar" class="stage-bar" aria-hidden="true">
+          <i data-stage="probe_done" title="检测网络"></i>
+          <i data-stage="portal_loaded" title="打开门户"></i>
+          <i data-stage="captcha_ready" title="识别验证码"></i>
+          <i data-stage="submitted" title="提交认证"></i>
+          <i data-stage="releasing" title="确认放行"></i>
+        </div>
+        <dl class="facts">
+          <dt>账号</dt><dd id="fact-account">未设置</dd>
+          <dt>密码</dt><dd id="fact-password">未保存</dd>
+          <dt>检测间隔</dt><dd id="fact-interval">5 秒</dd>
+          <dt>WAN IP</dt><dd id="fact-ip">--</dd>
+          <dt>最后检测</dt><dd id="fact-last">--</dd>
+        </dl>
+      </div>
+
+      <div class="actions">
+        <button id="btn-auth" class="btn btn-primary" type="button">立即认证</button>
+        <div class="action-row">
+          <button id="btn-start" class="btn" type="button">开始监控</button>
+          <button id="btn-stop" class="btn" type="button">停止监控</button>
+        </div>
+        <button id="btn-cancel" class="btn btn-ghost" type="button" hidden>取消认证</button>
+        <p id="busy-row" class="busy-row" hidden><span class="spinner" aria-hidden="true"></span>任务进行中 …</p>
+        <p id="first-use" class="hint" hidden>
+          首次使用请先在“设置”中填写账号密码
+          <button id="btn-goto-settings" class="link" type="button">去设置</button>
+        </p>
+      </div>
+
+      <section class="log-well" aria-label="运行日志">
+        <div class="log-head">
+          <h2>运行日志</h2>
+          <span id="log-count" class="log-count">0 条</span>
+          <label class="check small"><input id="auto-scroll" type="checkbox" checked> 自动滚动</label>
+          <button id="log-clear" class="link" type="button">清空</button>
+        </div>
+        <div id="log-list" class="log-list" role="log"></div>
+      </section>
+    </section>
+
+    <section id="view-settings" class="view settings-view" hidden aria-label="设置">
+      <div class="settings-head">
+        <button id="btn-back" class="link back" type="button">← 返回</button>
+        <span id="dirty-hint" class="dirty" hidden>有未保存的修改</span>
+      </div>
+
+      <form id="settings-form" class="settings-form" novalidate>
+        <div class="form-section">
+          <h2>账号密码</h2>
+          <label for="student-id">学号 / 宽带账号</label>
+          <input id="student-id" name="student-id" type="text" autocomplete="username" spellcheck="false">
+          <label for="password">密码</label>
+          <input id="password" name="password" type="password" autocomplete="current-password">
+          <p id="password-state" class="hint"></p>
+          <p class="hint">密码仅保存在操作系统密钥环，不写入配置文件。</p>
+        </div>
+
+        <div class="form-section">
+          <h2>运行参数</h2>
+          <label for="interval">断线检测间隔（秒）</label>
+          <input id="interval" name="interval" type="number" min="3" max="3600" step="1" inputmode="numeric">
+          <p class="hint">最小 3 秒。实际检测周期约为间隔 + 2 秒。</p>
+          <label class="check"><input id="auto-start-monitor" type="checkbox"> 启动后自动开始监控</label>
+          <label class="check"><input id="close-to-tray" type="checkbox"> 关闭窗口时最小化到托盘</label>
+          <label class="check"><input id="autostart" type="checkbox"> 开机自启（最小化到托盘）</label>
+          <p id="tray-hint" class="hint" hidden></p>
+        </div>
+
+        <div class="form-section">
+          <h2>认证浏览器</h2>
+          <label for="browser-mode">来源</label>
+          <select id="browser-mode" name="browser-mode">
+            <option value="auto">自动（优先随包）</option>
+            <option value="system">系统浏览器</option>
+            <option value="bundled">随包 Chromium</option>
+            <option value="custom">自定义路径</option>
+          </select>
+          <div id="custom-path-row" hidden>
+            <label for="custom-path">可执行文件路径</label>
+            <div class="path-row">
+              <input id="custom-path" name="custom-path" type="text" spellcheck="false">
+              <button id="btn-browse" class="btn" type="button">浏览…</button>
+            </div>
+          </div>
+          <p class="hint">认证必须使用真实 Chromium 内核（系统 Edge/Chrome/Chromium，或程序目录下的随包 Chromium）。</p>
+          <div class="path-row">
+            <button id="btn-test-browser" class="btn" type="button">检测浏览器</button>
+            <span id="browser-result" class="hint inline"></span>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button id="btn-save" class="btn btn-primary" type="submit">保存设置</button>
+          <button id="btn-clear" class="btn btn-danger" type="button">清除已保存的账号密码</button>
+          <p class="hint">修改检测间隔或浏览器设置后，需要重新开始监控才会生效。</p>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <span>浏览器：<span id="footer-browser">未检测</span></span>
+    <span id="footer-config" class="footer-config" title=""></span>
+  </footer>
+</div>
+
+<dialog id="fatal-dialog">
+  <h2>需要处理</h2>
+  <p id="fatal-text"></p>
+  <div class="dialog-actions">
+    <button id="fatal-ok" class="btn btn-primary" type="button">知道了</button>
+  </div>
+</dialog>
+
+<dialog id="clear-dialog">
+  <h2>清除账号密码</h2>
+  <p>将从系统密钥环和配置中删除已保存的账号密码，确定继续？</p>
+  <div class="dialog-actions">
+    <button id="clear-cancel" class="btn" type="button">取消</button>
+    <button id="clear-confirm" class="btn btn-danger solid" type="button">清除</button>
+  </div>
+</dialog>
+</body>
+</html>

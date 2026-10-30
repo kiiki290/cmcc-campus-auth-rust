@@ -1,46 +1,9 @@
-[package]
-name = "cmcc-campus-auth"
-version = "0.1.0"
-edition = "2024"
-rust-version = "1.92"
-description = "中国移动校园宽带 Portal 自动认证（Rust GUI 版）"
-license = "MIT"
+[workspace]
+resolver = "3"
+members = ["src-tauri"]
+default-members = ["src-tauri"]
 
-[dependencies]
-# GUI
-eframe = { version = "0.35", default-features = false, features = [
-    "default_fonts",
-    "glow",
-    "wayland",
-    "x11",
-] }
-
-# 异步运行时 / 浏览器自动化
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
-futures = "0.3"
-chromiumoxide = "0.9.1"
-
-# 验证码 OCR（ddddocr 的 Rust 移植，ONNX Runtime 后端）
-ddddocr-core = "0.2.4"
-ddddocr-ort = "0.2.4"
-ort = "=2.0.0-rc.12"
-
-# 配置、凭据、系统集成
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-keyring = "4.2"
-anyhow = "1"
-tray-icon = { version = "0.26", default-features = false, features = ["ksni"] }
-auto-launch = "0.6"
-chrono = { version = "0.4", default-features = false, features = ["clock"] }
-
-# 杂项
-image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
-base64 = "0.22"
-rand = "0.9"
-url = "2"
-
-
+# 发布构建：薄 LTO + 单代码单元 + 去符号，压缩体积
 [profile.release]
 lto = "thin"
 codegen-units = 1

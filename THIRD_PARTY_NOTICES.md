@@ -8,4 +8,8 @@
 - **Chrome for Testing / chrome-headless-shell**（bundled 分发包内）
   来源：<https://googlechromelabs.github.io/chrome-for-testing/>，
   随附的 `LICENSE.headless_shell` 位于 `chromium/` 目录。
+- **Tauri 2**（MIT OR Apache-2.0）及官方插件 `tauri-plugin-single-instance`、
+  `tauri-plugin-dialog`：<https://tauri.app/>。
+- **WebKitGTK / WebView2**：Linux 端使用系统 WebKitGTK 4.1（LGPL-2.1+），
+  Windows 端使用系统 WebView2 Runtime（Microsoft 分发条款），均不随本程序分发。
 - 其余 Rust 依赖的许可证见 `Cargo.lock` 对应 crate 的元数据。

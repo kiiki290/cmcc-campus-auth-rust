@@ -2,18 +2,22 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-校园宽带自动认证 GUI：Rust + egui 重写自同目录的 Python CLI 项目（`../cmcc-campus-auth`）。
+校园宽带自动认证 GUI：Rust + Tauri 2（系统 WebView）重写自同目录的 Python CLI 项目
+（`../cmcc-campus-auth`）；前端是 `ui/` 下的纯静态 HTML/CSS/JS，无构建步骤。
 面向 Windows + Linux；认证核心依赖真实 Chromium 内核（Portal 前的瑞数动态防护拦截纯 HTTP POST）。
 全部注释、日志、界面为中文；无 lint 配置；实网已验证单次认证全流程（2026-10-29，见 README）。
 
 ## 常用命令
 
 ```bash
-cargo build                     # 开发构建
-cargo run                       # 运行 GUI（Linux 需要 Wayland/X11 + GL）
-cargo test                      # 单元测试（23 个，秒级；另有 4 个 ignored）
+cargo build                     # 开发构建（ui/ 在编译期嵌入二进制）
+cargo run                       # 运行 GUI（Linux 需要 WebKitGTK 4.1）
+cargo test                      # 单元测试（26 个，秒级；另有 4 个 ignored）
 cargo fmt                       # 格式化
 cargo clippy -- -D warnings     # 静态检查
+
+# 前端热更新（可选，需要 Tauri CLI；不装也能 cargo run，只是改前端后要重新编译）
+npx @tauri-apps/cli@2 dev
 
 # 需要浏览器的端到端测试（默认 ignore）
 CMCC_BUNDLED_CHROMIUM=/path/to/chrome-headless-shell CMCC_ALLOW_LOOPBACK=1 \
@@ -31,12 +35,17 @@ scripts/package.sh
 
 ## 架构
 
-单 crate 二进制，模块划分见 README「代码结构」。线程模型：
+根目录 Cargo workspace，成员 `src-tauri`（Rust）与纯静态 `ui/`。模块划分见 README
+「代码结构」。线程模型：
 
-- eframe 主线程：`App::logic` 处理事件/托盘/状态，`App::ui` 只绘图（egui 0.35 的
-  `App` trait 是 `logic` + `ui`，不是旧的 `update`）
-- 后台 tokio 多线程运行时：认证/监控任务；通过 `std::sync::mpsc` 的
-  `EngineEvent` 回传日志与状态；界面每 250ms 主动重绘以消费事件
+- Tauri/tao 主线程：窗口、托盘、菜单及所有窗口操作；命令里可能阻塞的工作
+  （keyring、autostart、浏览器解析）用 `tauri::async_runtime::spawn_blocking`
+- 后台 tokio 多线程运行时（2 worker）：认证/监控任务；`EngineEvent` 经
+  `std::sync::mpsc` 交给 `bridge.rs` 的独立线程，按 80ms / 200 条批量通过
+  `tauri::ipc::Channel` 推给前端，无事件时零唤醒
+- 状态只在 Rust：`AppState` 持有 Engine、配置、密码缓存、快照与日志环；前端只拿
+  `Bootstrap` + 快照，密码永不返回。`Engine`/`EventSink` 内含 `mpsc::Sender`（!Sync），
+  必须用 `Mutex` 包裹才能放进 Tauri State
 - 浏览器：`chromiumoxide`（CDP），每次认证启动一个 headless Chromium，结束后关闭
 
 ## 认证核心不可随意改动的点
@@ -56,6 +65,9 @@ scripts/package.sh
   `None`（探测异常）按本轮失败处理，不要当成“未放行”或成功。
 - **失败策略**：单次认证 3 轮失败结束；监控模式 3 轮失败后等待 30 秒继续轮询，
   仅 Fatal 才停止监控。`Fatal` 事件会强制显示主窗口，避免托盘后台无提示。
+- **认证阶段埋点**：`EngineEvent::Stage(AuthStage)` 只在 探测完成 / 门户已打开 /
+  验证码识别完成 / 表单已提交 / 开始确认放行 五个节点发出，供界面阶段条展示，
+  不参与任何判断；改动认证流程时保持“只发事件、不改控制流”。
 - **提交目标校验**：默认只允许 `218.200.239.185:8888`，并要求 frame 文档与
   action 同源；回环仅 debug/test 或 `CMCC_ALLOW_LOOPBACK=1`，其他 Portal 用
   `CMCC_PORTAL_HOST=host[:port]` 扩展白名单。校验失败按 Fatal 处理、不重试。
@@ -68,8 +80,10 @@ scripts/package.sh
 
 ## 浏览器与平台
 
-- 浏览器来源顺序：`CMCC_BUNDLED_CHROMIUM` → 程序目录随包 → 系统 Edge/Chrome/Chromium。
-  “自定义路径”是独立模式，不参与自动解析。`chrome-headless-shell` 启动时不能再传 `--headless`（用 `with_head()`）。
+- 浏览器来源顺序：`CMCC_BUNDLED_CHROMIUM` → Tauri 资源目录 `chromium/` → 程序目录随包
+  → 系统 Edge/Chrome/Chromium。“自定义路径”是独立模式，不参与自动解析。
+  资源目录提示由 `browser::set_resource_dir` 在 `setup` 注入（deb/AppImage 用）。
+  `chrome-headless-shell` 启动时不能再传 `--headless`（用 `with_head()`）。
 - chromiumoxide `.arg()` 会自动补 `--`，参数不要带前导短横线；`.hide()` 负责加
   `--disable-blink-features=AutomationControlled`，另加 `no-proxy-server` /
   `no-default-browser-check`。
@@ -87,14 +101,25 @@ scripts/package.sh
   避免每次认证都失败一次；改这里时注意保留该降级路径。
 - 凭据：`keyring`（v1 API，默认 zbus Secret Service / Windows 原生）。配置文件只存学号等，
   密码绝不写盘；测试用独立 service 名，勿覆盖真实条目。
-- 托盘：`tray-icon` 的 `ksni` feature（免 GTK/libappindicator 依赖）。Windows 上托盘
-  必须在事件循环线程创建；当前在 `App::logic` 首次调用时创建，eframe 正运行在该线程。
-  GNOME 需要 AppIndicator/Ubuntu AppIndicators 扩展才能显示。
-- 单实例：配置文件目录下 `instance.lock` 文件锁 + `instance.port` 回环端口唤起。
-  监听端必须先读掉客户端数据再关闭（否则内核可能回 RST），并设 2 秒读超时，
-  防止本地进程连上不发数据卡住监听线程。
-- 托盘可用性：ksni 后端在无 StatusNotifierWatcher 时也返回成功，创建前用
+- 托盘：Tauri 2 `tray-icon` feature（Linux 走 libayatana-appindicator，需要
+  `libayatana-appindicator3-dev`）。菜单启用状态由 `tray::update_menu_state` 按快照刷新；
+  Linux 不发送托盘图标点击事件，只能用菜单项「显示主窗口」；GNOME 需要
+  AppIndicator/Ubuntu AppIndicators 扩展才能显示。
+- 单实例：`tauri-plugin-single-instance`（Linux 走 D-Bus，名称基于 bundle identifier），
+  必须第一个注册；第二次启动在回调里 `window::show_main` 显示/聚焦窗口。
+- 托盘动作（立即认证 / 开始监控）使用**已保存**的设置；界面上的按钮会先自动保存
+  未提交的设置草稿再执行。这是与旧 egui 版唯一的有意行为差异。
+- 托盘可用性：libayatana 在无 StatusNotifierWatcher 时也可能创建成功，启动时用
   `busctl`/`gdbus` 探测，缺失则禁用关闭到托盘并提示启用 GNOME AppIndicator 扩展。
+- 窗口生命周期：`tauri.conf.json` 中 `visible:false`，前端首帧调用 `ui_ready` 后显示，
+  另有 3 秒兜底显示（防止前端脚本错误导致窗口永不出现）。关闭到托盘时不要在
+  `CloseRequested` 处理器里同步 `hide()`——GTK/WM 状态会不同步，之后 `show()` 无法
+  重新映射；用 `app.run_on_main_thread` 推迟到事件循环下一轮。
+- 前端/CSP：`ui/` 纯静态，`withGlobalTauri` 暴露 `invoke/Channel`；CSP 只允许
+  self + data: 图片 + IPC，不要引入内联脚本、远程字体/图片。日志批量与上限在
+  `ui/app.js`（1500 行 / 600 DOM 节点）。
+- 开机自启：复用 `autostart.rs`（`--minimized`）；AppImage 下 `current_exe()` 指向
+  临时挂载目录，必须用 `$APPIMAGE` 作为自启目标。
 - 取消：`auth_once` 的 CancelFlag 保存于 Engine，界面提供“取消认证”；长等待
   （浏览器启动/goto/fetch）仍可能延迟数秒，监控停止同理。
 
@@ -105,9 +130,11 @@ scripts/package.sh
   真实 chrome-headless-shell，验证 探测→OCR→提交→结果→放行 全链路。运行前需设置
   `CMCC_BUNDLED_CHROMIUM`；测试内部设置 `CMCC_PROBE_TARGET` / `CMCC_RELEASE_TARGET` /
   `CMCC_NO_SANDBOX`，必须单独运行（环境变量是进程级的）。
-- UI 截图调试：`cargo run -- --screenshot /tmp/app.png`（渲染数帧后保存并退出），
-  已用于验证中文字体/布局。开发时用 `XDG_CONFIG_HOME`/`XDG_DATA_HOME` 指向临时目录，
-  避免污染真实配置。
+- UI 验证：`npx @tauri-apps/cli@2 dev`（或 `cargo run`，前端改动需重新编译）配合
+  WebKit Inspector 看 DOM/控制台；Linux 用 X11 后端时可用
+  `xdotool search --name 校园宽带自动认证` + `import -window <id>` 截图
+  （Wayland 原生窗口无法用 `import` 捕获）。开发时用 `XDG_CONFIG_HOME`/`XDG_DATA_HOME`
+  指向临时目录，避免污染真实配置。原 `--screenshot` 调试模式已移除。
 - **实网验证状态**：2026-10-29 已在真实校园网用系统 Edge 完成单次认证全流程
   （探测→frame→OCR→JS 提交→结果→BRAS 放行）；瑞数挑战失败问题已复现并修复。
   断线自动重连的长时间稳定性仍建议观察；Portal 改版、放行细节仍只能在实网确认。
@@ -116,15 +143,21 @@ scripts/package.sh
 ## 打包
 
 - `scripts/package.sh [all|lite|bundled]`：Linux release + 两个 tar.gz；
-  `scripts/package.ps1`：Windows 对应版本。
+  `scripts/package.ps1`：Windows 对应版本。`ui/` 在编译期嵌入二进制，便携包结构与
+  旧版一致，`cargo build --release` 即可，无需 Node。
+- 系统安装包（可选，需要 Tauri CLI）：`npx @tauri-apps/cli@2 build --bundles deb,appimage`
+  （Windows `--bundles nsis`）。bundled 版 deb 先把浏览器放进 `src-tauri/chromium/`，
+  再用 `--config src-tauri/tauri.bundled.conf.json` 作为 resources 打入，运行时经
+  `resource_dir()` 查找。
 - lite 不携带浏览器；bundled 通过 `fetch_chromium.sh|.ps1` 从 Chrome for Testing 下载
   `chrome-headless-shell` 放进 `chromium/`，程序递归查找。
 - 模型已 `include_bytes!` 进二进制，无需单独分发 `assets/`。
-- 发布产物不要包含 `~/.config`、浏览器 profile、日志。
+- 发布产物不要包含 `~/.config`、浏览器 profile、日志、`src-tauri/gen/`。
 
 ## 维护约定
 
-- 保持最低 Rust 1.92（eframe 0.35 MSRV 1.92；本机 apt rustc 1.93）。
+- 保持最低 Rust 1.92（Tauri 2 的 MSRV 更低；本机 rustc 1.93）。前端无构建步骤，
+  改动 `ui/` 后需重新编译才能进入二进制（或用 `tauri dev` 热更新）。
 - 改动认证逻辑时同步检查：重试次数/间隔、致命错误列表、日志文案、README/CLAUDE.md。
 - 完成 TODO 项后移入 docs/DONE.md；docs/TODO.md 与 docs/DONE.md 必须与代码实际状态一致。
 - 提交前按全局规范做 diff 审查；提交信息用中文 conventional commit。

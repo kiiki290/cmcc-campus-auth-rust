@@ -1,0 +1,40 @@
+[package]
+name = "cmcc-campus-auth"
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.92"
+description = "中国移动校园宽带 Portal 自动认证（Tauri 版）"
+license = "MIT"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# 界面外壳（系统 WebView，前端为纯静态文件）
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-single-instance = "2"
+tauri-plugin-dialog = "2"
+
+# 异步运行时 / 浏览器自动化
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+futures = "0.3"
+chromiumoxide = "0.9.1"
+
+# 验证码 OCR（ddddocr 的 Rust 移植，ONNX Runtime 后端）
+ddddocr-core = "0.2.4"
+ddddocr-ort = "0.2.4"
+ort = "=2.0.0-rc.12"
+
+# 配置、凭据、系统集成
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+keyring = "4.2"
+anyhow = "1"
+auto-launch = "0.6"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+
+# 杂项
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+base64 = "0.22"
+rand = "0.9"
+url = "2"

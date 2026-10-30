@@ -20,7 +20,7 @@ use url::Url;
 
 use crate::browser::{self, BrowserSession};
 use crate::config::AppConfig;
-use crate::events::{EventSink, Phase};
+use crate::events::{AuthStage, EngineEvent, EventSink, Phase};
 use crate::ocr::{self, OcrEngine};
 use crate::probe::{self, PortalProbe};
 
@@ -304,7 +304,8 @@ async fn authenticate(
         return Err(AuthError::Cancelled);
     }
 
-    sink.send(crate::events::EngineEvent::Phase(Phase::Authenticating));
+    sink.send(EngineEvent::Stage(AuthStage::ProbeDone));
+    sink.send(EngineEvent::Phase(Phase::Authenticating));
 
     // 2. OCR 模型在后台加载，与浏览器启动并行
     let ocr_task = tokio::task::spawn_blocking(ocr::load_cached);
@@ -363,6 +364,7 @@ async fn run_flow(
         sink.error(format!("✗ {err}"));
         return Err(AuthError::Fatal(err));
     }
+    sink.send(EngineEvent::Stage(AuthStage::PortalLoaded));
     let mut jsessionid = jsessionid_from_action(&info.action).unwrap_or_default();
     if jsessionid.is_empty() {
         jsessionid = jsessionid_from_cookies(page).await.unwrap_or_default();
@@ -469,6 +471,7 @@ async fn run_flow(
     if captcha.is_empty() {
         return Err(AuthError::Failed("验证码识别失败".to_string()));
     }
+    sink.send(EngineEvent::Stage(AuthStage::CaptchaReady));
 
     if cancel.is_cancelled() {
         return Err(AuthError::Cancelled);
@@ -499,6 +502,8 @@ async fn run_flow(
         }
     }
 
+    sink.send(EngineEvent::Stage(AuthStage::Submitted));
+
     // 6. 轮询结果页
     let result = wait_for_result(page, cancel).await?;
     match classify_result(&result.title, &result.admin, &result.text) {
@@ -520,6 +525,7 @@ async fn run_flow(
     }
 
     // 7. 确认 BRAS 真正放行（0/1/2/3/5/8s 递增，总窗口约 19s）
+    sink.send(EngineEvent::Stage(AuthStage::Releasing));
     for (index, delay) in [0u64, 1, 2, 3, 5, 8].into_iter().enumerate() {
         if delay > 0 && !sleep_cancellable(Duration::from_secs(delay), cancel).await {
             return Err(AuthError::Cancelled);
@@ -1122,7 +1128,7 @@ mod tests {
             let _ = stream.write_all(body);
         }
 
-        const CAPTCHA_PNG: &[u8] = include_bytes!("../assets/test/captcha_6971.png");
+        const CAPTCHA_PNG: &[u8] = include_bytes!("../../assets/test/captcha_6971.png");
         const JSESSIONID: &str = "51B9DC8F82AB5CFC08241F5DEEA59A70";
 
         fn handle_portal(mut stream: TcpStream, port: u16) {

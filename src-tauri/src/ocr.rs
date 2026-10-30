@@ -9,7 +9,7 @@ use anyhow::{Context, Result};
 use ddddocr_core::traits::Loader;
 use ddddocr_core::{ModelMetadata, Normalization, Ocr, Resize};
 
-static MODEL: &[u8] = include_bytes!("../assets/models/common_old.onnx");
+static MODEL: &[u8] = include_bytes!("../../assets/models/common_old.onnx");
 
 pub struct OcrEngine {
     runtime: Arc<ddddocr_ort::OcrRuntime>,

@@ -5,11 +5,22 @@ use auto_launch::AutoLaunch;
 pub const APP_NAME: &str = "cmcc-campus-auth";
 pub const ARG_MINIMIZED: &str = "--minimized";
 
+/// AppImage 运行时 `current_exe()` 指向解包后的临时目录，必须改用 `$APPIMAGE`，
+/// 否则重启后自启项指向已删除的挂载路径。
+fn executable_path() -> Result<std::path::PathBuf, String> {
+    if let Some(appimage) = std::env::var_os("APPIMAGE").map(std::path::PathBuf::from)
+        && appimage.is_file()
+    {
+        return Ok(appimage);
+    }
+    std::env::current_exe().map_err(|err| format!("获取程序路径失败：{err}"))
+}
+
 fn launcher() -> Result<AutoLaunch, String> {
     if !AutoLaunch::is_support() {
         return Err("当前平台不支持开机自启".to_string());
     }
-    let exe = std::env::current_exe().map_err(|err| format!("获取程序路径失败：{err}"))?;
+    let exe = executable_path()?;
     let exe = exe.to_string_lossy().to_string();
     let launch_path = launch_path(&exe);
     let args = [ARG_MINIMIZED];

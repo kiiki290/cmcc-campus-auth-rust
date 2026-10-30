@@ -9,6 +9,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
@@ -94,6 +95,14 @@ pub fn resolve(cfg: &AppConfig) -> Result<ResolvedBrowser, String> {
     }
 }
 
+/// Tauri 打包后的资源目录（deb/AppImage 里不是可执行文件旁边）。
+static RESOURCE_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// 由 Tauri 启动时调用；便携版不调用也不影响现有查找顺序。
+pub fn set_resource_dir(dir: PathBuf) {
+    let _ = RESOURCE_DIR.set(dir);
+}
+
 fn bundled_browser() -> Option<PathBuf> {
     if let Some(custom) = std::env::var_os("CMCC_BUNDLED_CHROMIUM") {
         let path = PathBuf::from(custom);
@@ -105,15 +114,20 @@ fn bundled_browser() -> Option<PathBuf> {
         }
     }
 
-    let exe_dir = std::env::current_exe()
+    let mut candidates = Vec::new();
+    if let Some(resource_dir) = RESOURCE_DIR.get() {
+        candidates.push(resource_dir.join("chromium"));
+        candidates.push(resource_dir.join("resources").join("chromium"));
+    }
+    if let Some(exe_dir) = std::env::current_exe()
         .ok()
-        .and_then(|p| p.parent().map(Path::to_path_buf))?;
-    let candidates = [
-        exe_dir.join("chromium"),
-        exe_dir.join("chrome-headless-shell"),
-        exe_dir.join("browser"),
-        exe_dir.join("resources").join("chromium"),
-    ];
+        .and_then(|p| p.parent().map(Path::to_path_buf))
+    {
+        candidates.push(exe_dir.join("chromium"));
+        candidates.push(exe_dir.join("chrome-headless-shell"));
+        candidates.push(exe_dir.join("browser"));
+        candidates.push(exe_dir.join("resources").join("chromium"));
+    }
     for dir in candidates {
         if let Some(found) = find_in_dir(&dir, 4) {
             return Some(found);

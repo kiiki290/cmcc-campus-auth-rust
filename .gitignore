@@ -5,3 +5,8 @@
 .DS_Store
 __pycache__/
 *.pyc
+
+# Tauri
+/src-tauri/gen/
+/src-tauri/chromium/
+/src-tauri/app-icon.png

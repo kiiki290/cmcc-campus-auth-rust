@@ -3,6 +3,9 @@
 #   - lite：只含程序，使用系统 Chrome/Edge/Chromium
 #   - bundled：额外包含 chrome-headless-shell（约 200MB）
 #
+# 前端（ui/）由 Tauri 在编译期嵌入二进制，无需额外打包步骤。
+# 需要 deb/AppImage 时另用：npx @tauri-apps/cli@2 build --bundles deb,appimage
+#
 # 用法：scripts/package.sh [all|lite|bundled]
 set -euo pipefail
 
@@ -11,7 +14,7 @@ MODE="${1:-all}"
 case "$MODE" in all | lite | bundled) ;; *) echo "用法：$0 [all|lite|bundled]" >&2; exit 1 ;; esac
 
 command -v jq >/dev/null || { echo "需要 jq" >&2; exit 1; }
-VERSION="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')"
+VERSION="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "cmcc-campus-auth") | .version')"
 ARCH="$(uname -m)"
 BIN="target/release/cmcc-campus-auth"
 
