@@ -135,6 +135,13 @@ scripts/package.sh
   `xdotool search --name 校园宽带自动认证` + `import -window <id>` 截图
   （Wayland 原生窗口无法用 `import` 捕获）。开发时用 `XDG_CONFIG_HOME`/`XDG_DATA_HOME`
   指向临时目录，避免污染真实配置。原 `--screenshot` 调试模式已移除。
+- 交互验证（桌面会话异常、XWayland 窗口被 WM 置为 Iconic 时）：`Xvfb :99 -screen 0
+  1200x900x24`，以 `DISPLAY=:99 GDK_BACKEND=x11 LIBGL_ALWAYS_SOFTWARE=1
+  WEBKIT_DISABLE_DMABUF_RENDERER=1` 启动，用 `xdotool` 点击/输入、`import -window root`
+  截图；关闭到托盘用 Python-Xlib 发 `WM_DELETE_WINDOW`；托盘菜单状态读
+  `com.canonical.dbusmenu.GetLayout`，菜单动作发 `Event`。
+  注意 Linux `auto-launch` 写死 `~/.config/autostart`，不受 `XDG_CONFIG_HOME` 影响，
+  测过开机自启后要取消勾选，避免给调试二进制留下真实自启项。
 - **实网验证状态**：2026-10-29 已在真实校园网用系统 Edge 完成单次认证全流程
   （探测→frame→OCR→JS 提交→结果→BRAS 放行）；瑞数挑战失败问题已复现并修复。
   断线自动重连的长时间稳定性仍建议观察；Portal 改版、放行细节仍只能在实网确认。

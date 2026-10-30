@@ -263,22 +263,23 @@ assets/
 
 ## 资源占用
 
-release 构建，Linux + WebKitGTK 2.52，窗口空闲时的实测（同一进程树）：
+release 构建，Linux + WebKitGTK 2.52，窗口可见、待机（未监控）状态实测
+（同一进程树，2026-10-30）：
 
 | 进程 | RSS | PSS |
 |---|---:|---:|
-| 主进程（Rust + GTK） | 约 151 MB | 约 52 MB |
-| WebKitWebProcess | 约 196 MB | 约 84 MB |
+| 主进程（Rust + GTK） | 约 154 MB | 约 56 MB |
+| WebKitWebProcess | 约 169 MB | 约 60 MB |
 | WebKitNetworkProcess | 约 49 MB | 约 15 MB |
-| **合计** | 约 396 MB（共享库被重复计入） | **约 151 MB** |
+| **合计** | 约 373 MB（共享库被重复计入） | **约 132 MB** |
 
 - 空闲 CPU ≈ 0%：事件驱动，无定时重绘、无常驻动画；仅认证任务运行时才有负载。
 - 迁移前的 egui 版为单进程约 50–80 MB。Tauri 的系统 WebView 多进程模型必然带来
-  约 +70–100 MB 常驻开销（PSS 口径），这是换取界面表现力的代价，仍显著低于
+  约 +50–80 MB 常驻开销（PSS 口径），这是换取界面表现力的代价，仍显著低于
   Electron（约 200–350 MB）。debug 构建会因符号与未优化代码明显更高，请以
   release 为准。
-- 测量时开发机窗口被 WM 异常置为最小化（会话级问题，与程序无关），可见状态下的
-  数值可能略有差异。
+- 数值随页面内容、日志条数与渲染后端波动（上次最小化状态下测得 PSS 约 151 MB）。
+  本次在 Xvfb + 软件渲染下测量以绕过开发机会话的 WM 异常；真实 GPU 合成下可能略有差异。
 
 ## 已知局限
 
@@ -290,7 +291,7 @@ release 构建，Linux + WebKitGTK 2.52，窗口空闲时的实测（同一进�
   Tauri 不转发托盘图标点击事件，请用菜单项「显示主窗口」
 - **内存开销高于 egui 版**：Tauri 使用系统 WebView，Linux 为 WebKitGTK 多进程、
   Windows 为 WebView2 多进程。前端已按最低开销实现（无框架、无动画、日志上限），
-  但常驻内存仍明显高于纯 Rust 立即模式 GUI（PSS 合计约 151 MB，见「资源占用」）
+  但常驻内存仍明显高于纯 Rust 立即模式 GUI（PSS 合计约 132 MB，见「资源占用」）
 - Windows 运行时依赖 WebView2（Win10/11 通常已预装；无网络的校园环境请用带
   offline installer 的安装包）
 - 部分 NVIDIA + Wayland 环境 WebKitGTK 的 DMA-BUF 渲染会显示空白窗口，可设置
